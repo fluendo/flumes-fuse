@@ -7,6 +7,8 @@ from flume_fuse.options import FlumeFuseOptions
 
 
 def main(args=None):
+    # SQlite driver "can not work" in a multithread environment
+    # Make the option always available
     fuse = FlumeFuse(parser_class=FlumeFuseOptions, dash_s_do="setsingle")
     args = fuse.parse(values=fuse)
     fuse.main()
