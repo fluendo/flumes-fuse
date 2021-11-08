@@ -109,10 +109,12 @@ class TreeTablePath(Path):
         logger.debug("Class name {}".format(cls_name))
         # First the fields
         for field in [f.name for f in cls_name.__table__.columns if not f.primary_key]:
-            yield fuse.Direntry(field)
+            if hasattr(cls_name, field):
+                yield fuse.Direntry(field)
         # Now the relationships
         for relationship in [r.key for r in cls_name.__mapper__.relationships]:
-            yield fuse.Direntry(relationship)
+            if hasattr(cls_name, relationship):
+                yield fuse.Direntry(relationship)
 
     def parse(self, path):
         logger.debug("Parsing {}".format(path))
