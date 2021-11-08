@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "flume-fuse"
+version = "0.1.0"
+description = ""
+authors = ["Jorge Zapata <jorgeluis.zapata@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fuse-python = "^1.0.4"
+SQLAlchemy = "^1.4.26"
+flume = {git = "https://github.com/turran/flume.git"}
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+black = "^21.10b0"
+isort = "^5.10.0"
+pre-commit = "^2.15.0"
+
+[tool.poetry.scripts]
+flume-fuse = "bin.flume_fuse:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
