@@ -1,12 +1,3 @@
-#
-#
-# TODO:
-# - do not expose the following fields: path, id foreign keys
-# - add cmd line params for database
-# - avoid infinite recursion for fields that can not have more possible
-#   values
-
-
 import argparse
 import errno
 import importlib
