@@ -8,6 +8,7 @@
 
 
 import argparse
+import errno
 import importlib
 import logging
 import os
@@ -27,10 +28,14 @@ from fuse import Fuse
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select
 
-from .path import PathParser
+from .path import PathParser, TreeTablePath
 
 logger = logging.getLogger(__name__)
 fuse.fuse_python_api = (0, 2)
+
+
+class FilePath(TreeTablePath):
+    cls_name = File
 
 
 class FlumeFuse(Fuse):
@@ -47,6 +52,8 @@ class FlumeFuse(Fuse):
         self.schema = Schema(self.config)
         self.session = self.schema.create_session()
         self.path_parser = PathParser(self.schema)
+        # Regiter all the tables
+        self.path_parser.register("files", FilePath)
         self.now = time()
 
     def _get_file(self, path):
@@ -70,43 +77,29 @@ class FlumeFuse(Fuse):
         return result
 
     def open(self, path, flags):
-        p = self.path_parser.parse(path)
-        return p.open(flags)
+        try:
+            p = self.path_parser.parse(path)
+            return p.open(flags)
+        except FileNotFoundError:
+            return -errno.ENOENT
 
     def read(self, path, size, offset):
-        p = self.path_parser.parse(path)
-        return p.read(size, offset)
-
-    def release(self, path, fh):
-        return os.close(fh)
+        try:
+            p = self.path_parser.parse(path)
+            return p.read(size, offset)
+        except FileNotFoundError:
+            return -errno.ENOENT
 
     def readdir(self, path, offset):
-        p = self.path_parser.parse(path)
-        return p.readdir(offset)
-
-        common = [".", ".."]
-        p = Path(self.schema, path)
-        if p.component in [Path.ROOT, Path.VALUE]:
-            return common + self.schema.get_structs() + ["files"]
-        elif p.component == Path.STRUCT:
-            # Get the different fields
-            table_name = p.conditions[len(p.conditions) - 1]["struct"]
-            module = importlib.import_module("schema")
-            cls = getattr(module, table_name.capitalize())
-            return common + [
-                f.name
-                for f in cls.__table__.columns
-                if not f.primary_key and f.name != path
-            ]
-        elif p.component == Path.FIELD:
-            # Get the different values for the current query
-            values = self._get_values(p)
-            return common + [str(v[0]) for v in values]
-        elif p.component == Path.FILES:
-            # Get the different files for the current query
-            files = self._get_files(p)
-            return common + [str(f.id) for f in files]
+        try:
+            p = self.path_parser.parse(path)
+            return p.readdir(offset)
+        except FileNotFoundError:
+            return -errno.ENOENT
 
     def getattr(self, path):
-        p = self.path_parser.parse(path)
-        return p.getattr()
+        try:
+            p = self.path_parser.parse(path)
+            return p.getattr()
+        except FileNotFoundError:
+            return -errno.ENOENT

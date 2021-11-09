@@ -1,4 +1,3 @@
-import errno
 import logging
 import os
 from stat import S_IFDIR, S_IFREG
@@ -8,6 +7,7 @@ from flume.schema import Base, File, Info
 from sqlalchemy.orm.collections import InstrumentedList
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class Stat(fuse.Stat):
@@ -43,9 +43,6 @@ class Path(object):
     def read(self, size, offset):
         raise NotImplementedError
 
-    def release(self, flags):
-        raise NotImplementedError
-
     def readdir(self, offset):
         raise NotImplementedError
 
@@ -64,6 +61,7 @@ class TreeTablePath(Path):
         self.table = None
         self.field_path = []
         self.field = None
+        self.fields = []
         self.obj = None
         # In case the field is another class relationship list, keep the primary key
         # Get the name of the primary key field
@@ -74,7 +72,11 @@ class TreeTablePath(Path):
         field = None
         prev_obj = None
         prev_attr = None
-        for a in attr:
+        logger.debug("Getting fields {}".format(attr))
+        # TODO avoid recursion
+        while attr:
+            a = attr[0]
+            logger.debug("Getting field {}".format(a))
             # Handle the primary key case of an InstrumentedList
             if isinstance(obj, InstrumentedList):
                 logger.debug(
@@ -92,6 +94,7 @@ class TreeTablePath(Path):
                 result = self.session.execute(stmt)
                 field = result.scalar()
             else:
+                logger.debug("Handling basic field {} for {}".format(a, obj))
                 field = getattr(obj, a, None)
                 if not field and hasattr(obj, a):
                     logger.debug("Null field {} in {}".format(a, obj))
@@ -100,9 +103,15 @@ class TreeTablePath(Path):
             if not field:
                 logger.debug("Field {} not found in {}".format(a, obj))
                 break
+
+            self.fields.append(field)
+            self.field_path.append(a)
+
             prev_obj = obj
             prev_attr = a
             obj = field
+            attr.pop(0)
+
         return field
 
     def _get_obj_contents(self, cls_name):
@@ -119,33 +128,28 @@ class TreeTablePath(Path):
     def parse(self, path):
         logger.debug("Parsing {}".format(path))
         self.table = path.pop(0)
-        while path:
-            # Check the existance of the id
-            if not self.obj:
-                stmt = self.session.query(self.cls_name).filter(
-                    getattr(self.cls_name, self.pk) == path[0]
-                )
-                result = self.session.execute(stmt)
-                obj = result.scalar()
-                if obj:
-                    self.obj = obj
-                    path.pop(0)
-                else:
-                    return -errno.ENOENT
-            # Check the existance of the field
-            else:
-                field_path = list(self.field_path)
-                field_path.append(path[0])
-                field = self._get_field(field_path)
-                if field:
-                    self.field = field
-                    self.field_path = field_path
-                    path.pop(0)
-                else:
-                    break
+
+        # Check the existance of the id
+        if not path:
+            return
+        stmt = self.session.query(self.cls_name).filter(
+            getattr(self.cls_name, self.pk) == path[0]
+        )
+        result = self.session.execute(stmt)
+        obj = result.scalar()
+        if obj:
+            self.obj = obj
+            path.pop(0)
+        else:
+            raise FileNotFoundError
+
+        # Check the existance of the field
+        if path:
+            self.field = self._get_field(path)
+
         logger.debug(
-            "Obj: {}, Field: {}, Field path {}".format(
-                self.obj, self.field, self.field_path
+            "Obj: {}, Field: {}, Field path {}, Fields: {}".format(
+                self.obj, self.field, self.field_path, self.fields
             )
         )
 
@@ -189,7 +193,7 @@ class TreeTablePath(Path):
 
     def open(self, flags):
         if not self.field:
-            return -errno.ENOENT
+            raise FileNotFoundError
 
     def read(self, size, offset):
         sfield = str(self.field)
@@ -232,13 +236,9 @@ class SearchTablePath(Path):
                     if value_exists:
                         self.value = path.pop(0)
                     else:
-                        return -errno.ENOENT
+                        raise FileNotFoundError
             else:
                 raise FileNotFoundError
-
-
-class FilePath(TreeTablePath):
-    cls_name = File
 
 
 class RootPath(Path):
@@ -270,8 +270,6 @@ class PathParser(object):
         self.schema = schema
         self.session = self.schema.create_session()
         self.paths = {}
-        # Regiter all the tables
-        self.register("files", FilePath)
         # Register the root
         self.register("", RootPath)
 
@@ -299,5 +297,5 @@ class PathParser(object):
                 ret = pc
                 prev_path.append(pc)
             else:
-                return -errno.ENOENT
+                raise FileNotFoundError
         return ret
