@@ -88,9 +88,18 @@ class TreeTablePath(Path):
                     logger.debug("Avoid pointing to '{}' again".format(cls_name))
                     continue
                 # We don't want to traverse again the same object as before
-                # TODO Don't only check the path but the actual object
+                # FIXME Check the path, assuming the there are no columns with the same name
                 if r in self.field_path:
                     logger.debug(
+                        "Relationship already traversed {} {}".format(
+                            r, self.field_path
+                        )
+                    )
+                    continue
+                # Check the actual object
+                field = getattr(obj, r, None)
+                if field in self.fields:
+                    logger.warning(
                         "Relationship already traversed {} {}".format(
                             r, self.field_path
                         )
