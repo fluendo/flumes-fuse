@@ -67,6 +67,38 @@ class TreeTablePath(Path):
         # Get the name of the primary key field
         self.pk = [f.name for f in self.cls_name.__table__.columns if f.primary_key][0]
 
+    def _get_columns(self, obj):
+        cls_name = type(obj)
+        ret = []
+        for field in [f.name for f in cls_name.__table__.columns if not f.primary_key]:
+            if hasattr(cls_name, field):
+                ret.append(field)
+        return ret
+
+    def _get_relationships(self, obj):
+        cls_name = type(obj)
+        ret = []
+        for relationship in [r for r in cls_name.__mapper__.relationships]:
+            r = relationship.key
+            logger.debug("Relationship {}".format(r))
+            if hasattr(cls_name, r):
+                # Avoid a relationship that we have traversed already
+                # We won't move to the class this Path points to
+                if relationship.mapper.class_ == self.cls_name:
+                    logger.debug("Avoid pointing to '{}' again".format(cls_name))
+                    continue
+                # We don't want to traverse again the same object as before
+                # TODO Don't only check the path but the actual object
+                if r in self.field_path:
+                    logger.debug(
+                        "Relationship already traversed {} {}".format(
+                            r, self.field_path
+                        )
+                    )
+                    continue
+                ret.append(r)
+        return ret
+
     def _get_field(self, attr):
         obj = self.obj
         field = None
@@ -95,10 +127,12 @@ class TreeTablePath(Path):
                 field = result.scalar()
             else:
                 logger.debug("Handling basic field {} for {}".format(a, obj))
-                field = getattr(obj, a, None)
-                if not field and hasattr(obj, a):
-                    logger.debug("Null field {} in {}".format(a, obj))
-                    field = NullField()
+                field = None
+                if a in self._get_columns(obj) or a in self._get_relationships(obj):
+                    field = getattr(obj, a, None)
+                    if not field:
+                        logger.debug("Null field {} in {}".format(a, obj))
+                        field = NullField()
 
             if not field:
                 logger.debug("Field {} not found in {}".format(a, obj))
@@ -114,16 +148,15 @@ class TreeTablePath(Path):
 
         return field
 
-    def _get_obj_contents(self, cls_name):
+    def _get_obj_contents(self, obj):
+        cls_name = type(obj)
         logger.debug("Class name {}".format(cls_name))
         # First the fields
-        for field in [f.name for f in cls_name.__table__.columns if not f.primary_key]:
-            if hasattr(cls_name, field):
-                yield fuse.Direntry(field)
+        for field in self._get_columns(obj):
+            yield fuse.Direntry(field)
         # Now the relationships
-        for relationship in [r.key for r in cls_name.__mapper__.relationships]:
-            if hasattr(cls_name, relationship):
-                yield fuse.Direntry(relationship)
+        for relationship in self._get_relationships(obj):
+            yield fuse.Direntry(relationship)
 
     def parse(self, path):
         logger.debug("Parsing {}".format(path))
@@ -171,13 +204,14 @@ class TreeTablePath(Path):
         return ret
 
     def readdir(self, offset):
+        logger.debug("Reading directory {}".format(self.field_path))
         common = [".", ".."]
         for r in common:
             yield fuse.Direntry(r)
 
         if self.field:
             if isinstance(self.field, Base):
-                yield from self._get_obj_contents(type(self.field))
+                yield from self._get_obj_contents(self.field)
             elif isinstance(self.field, InstrumentedList):
                 for i in self.field:
                     # FIXME this can be done before the loop
@@ -186,7 +220,7 @@ class TreeTablePath(Path):
                     ][0]
                     yield fuse.Direntry(str(getattr(i, list_object_id)))
         elif self.obj:
-            yield from self._get_obj_contents(self.cls_name)
+            yield from self._get_obj_contents(self.obj)
         else:
             for row in self.session.query(self.cls_name).all():
                 yield fuse.Direntry(str(getattr(row, self.pk)))
