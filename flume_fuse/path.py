@@ -30,9 +30,8 @@ class NullField(object):
 
 
 class Path(object):
-    def __init__(self, session, prev_path=None):
+    def __init__(self, session):
         self.session = session
-        self.prev_path = prev_path
 
     def parse(self, path):
         raise NotImplementedError
@@ -50,14 +49,37 @@ class Path(object):
         raise NotImplementedError
 
 
-class TreeTablePath(Path):
+class TablePath(Path):
+    """
+    Base class for common methods on Paths related to a table
+    """
+
+    cls_name = None
+
+    def _get_columns(self, obj=None, with_primary_key=False):
+        # In case we want to explore a table out of the defined table, for relationships
+        # for example
+        if obj:
+            cls_name = type(obj)
+        else:
+            cls_name = self.cls_name
+        ret = []
+        for field in [f for f in cls_name.__table__.columns]:
+            if not with_primary_key and field.primary_key:
+                continue
+            if hasattr(cls_name, field.name):
+                ret.append(field.name)
+        return ret
+
+
+class TreeTablePath(TablePath):
     """
     This class will parse paths in the form
     /<table>/<id>/<field>
     """
 
-    def __init__(self, session, prev_path=None):
-        super().__init__(session, prev_path=prev_path)
+    def __init__(self, session, **kwargs):
+        super().__init__(session)
         self.table = None
         self.field_path = []
         self.field = None
@@ -66,14 +88,9 @@ class TreeTablePath(Path):
         # In case the field is another class relationship list, keep the primary key
         # Get the name of the primary key field
         self.pk = [f.name for f in self.cls_name.__table__.columns if f.primary_key][0]
-
-    def _get_columns(self, obj):
-        cls_name = type(obj)
-        ret = []
-        for field in [f.name for f in cls_name.__table__.columns if not f.primary_key]:
-            if hasattr(cls_name, field):
-                ret.append(field)
-        return ret
+        self.filtered_stmt = None
+        if kwargs:
+            self.filtered_stmt = kwargs.get("filtered")
 
     def _get_relationships(self, obj):
         cls_name = type(obj)
@@ -114,7 +131,6 @@ class TreeTablePath(Path):
         prev_obj = None
         prev_attr = None
         logger.debug("Getting fields {}".format(attr))
-        # TODO avoid recursion
         while attr:
             a = attr[0]
             logger.debug("Getting field {}".format(a))
@@ -169,14 +185,24 @@ class TreeTablePath(Path):
 
     def parse(self, path):
         logger.debug("Parsing {}".format(path))
-        self.table = path.pop(0)
+        # Reset vars
+        self.table = None
+        self.field_path = []
+        self.field = None
+        self.fields = []
+        self.obj = None
+
+        path.pop(0)
+        self.table = self.cls_name
 
         # Check the existance of the id
         if not path:
             return
-        stmt = self.session.query(self.cls_name).filter(
-            getattr(self.cls_name, self.pk) == path[0]
-        )
+        if self.filtered_stmt == None:
+            stmt = self.session.query(self.cls_name)
+        else:
+            stmt = self.filtered_stmt
+        stmt = stmt.filter(getattr(self.cls_name, self.pk) == path[0])
         result = self.session.execute(stmt)
         obj = result.scalar()
         if obj:
@@ -231,7 +257,12 @@ class TreeTablePath(Path):
         elif self.obj:
             yield from self._get_obj_contents(self.obj)
         else:
-            for row in self.session.query(self.cls_name).all():
+            if self.filtered_stmt == None:
+                stmt = self.session.query(self.cls_name)
+            else:
+                stmt = self.filtered_stmt
+            result = self.session.execute(stmt)
+            for row in result.scalars().all():
                 yield fuse.Direntry(str(getattr(row, self.pk)))
 
     def open(self, flags):
@@ -250,44 +281,44 @@ class TreeTablePath(Path):
         return bytes(buf, encoding="UTF-8")
 
 
-class SearchTablePath(Path):
+class SearchTablePath(TablePath):
     """
     This class will parse paths in the form
     /<table>/<field>/<value>
     """
 
-    def __init__(self, session, prev_path=None):
-        super().__init__(session, prev_path=prev_path)
+    def __init__(self, session, **kwargs):
+        super().__init__(session)
         self.table = None
         self.field = None
         self.value = None
 
+    def get_filter_clause(self, stmt):
+        return stmt.filter(getattr(self.cls_name, self.field) == self.value)
+
     def parse(self, path):
         logger.debug("Parsing {}".format(path))
-        self.table = path.pop(0)
+        path.pop(0)
+        self.table = self.cls_name
         # Check the existance of the field
         if len(path):
             if path[0] in [f.name for f in self.cls_name.__table__.columns]:
                 self.field = path.pop(0)
                 # Check the existance of the value
                 if len(path):
+                    value = path[0].replace("_-_", os.path.sep)
                     value_exists = self.session.query(
                         self.session.query(self.cls_name)
-                        .filter(getattr(self.cls_name, self.field) == path[0])
+                        .filter(getattr(self.cls_name, self.field) == value)
                         .exists()
                     ).scalar()
                     if value_exists:
-                        self.value = path.pop(0)
+                        self.value = value
+                        path.pop(0)
                     else:
                         raise FileNotFoundError
             else:
                 raise FileNotFoundError
-
-
-class RootPath(Path):
-    def parse(self, path):
-        path.pop(0)
-        return 0
 
     def getattr(self):
         ret = Stat()
@@ -299,46 +330,202 @@ class RootPath(Path):
         return ret
 
     def readdir(self, offset):
-        # TODO add a parameter to know if the registered path should appear at root or not
-        for r in ".", "..", "files":
+        common = [".", ".."]
+        for r in common:
             yield fuse.Direntry(r)
+        if not self.field:
+            # Get all the columns
+            for f in self._get_columns():
+                yield fuse.Direntry(f)
+        else:
+            # Get all the values
+            stmt = self.session.query(getattr(self.cls_name, self.field)).distinct()
+            result = self.session.execute(stmt)
+            for obj in result.scalars():
+                # Make the value "pathable", change / by _-_
+                dirname = str(obj).replace(os.path.sep, "_-_")
+                yield fuse.Direntry(dirname)
+
+
+class RootPath(Path):
+    cls_paths = []
+
+    def __init__(self, session, **kwargs):
+        super().__init__(session)
+        self.child_path = None
+
+    def parse(self, paths):
+        self.child_path = None
+        paths.pop(0)
+        while paths:
+            p = paths[0]
+            # The case ["", ""] for "/"
+            if not p:
+                paths.pop(0)
+                continue
+            found = False
+            for name, cls in self.cls_paths:
+                if p != name:
+                    continue
+                pc = cls(self.session)
+                pc.parse(paths)
+                self.child_path = pc
+                found = True
+            if not found:
+                raise FileNotFoundError
+
+    def open(self, flags):
+        if not self.child_path:
+            raise FileNotFoundError
+        else:
+            return self.child_path.open(flags)
+
+    def read(self, size, offset):
+        if not self.child_path:
+            raise FileNotFoundError
+        else:
+            return self.child_path.read(size, offset)
+
+    def getattr(self):
+        if not self.child_path:
+            ret = Stat()
+            ret.st_mode = S_IFDIR | 0o755
+            # ret.st_ctime = self.now,
+            # ret.st_mtime = self.now,
+            # ret.st_atime = self.now,
+            ret.st_nlink = 2
+            return ret
+        else:
+            return self.child_path.getattr()
+
+    def readdir(self, offset):
+        if not self.child_path:
+            for r in ".", "..":
+                yield fuse.Direntry(r)
+            for p, _unsued in self.cls_paths:
+                yield fuse.Direntry(p)
+        else:
+            yield from self.child_path.readdir(offset)
 
 
 class SearchPath(Path):
-    pass
+    """
+    This class will parse paths in the form
+    /<search/<query>/<query>/<results>
+    """
+
+    queries = []
+    results = None
+
+    def __init__(self, session, **kwargs):
+        super().__init__(session)
+        self.child_paths = []
+        self.result_path = None
+
+    def parse(self, paths):
+        self.child_paths = []
+        paths.pop(0)
+        while paths:
+            p = paths[0]
+            found = False
+            for name, cls in self.queries:
+                if p != name:
+                    continue
+                pc = cls(self.session)
+                pc.parse(paths)
+                self.child_paths.append(pc)
+                found = True
+
+            if not found and not self.result_path:
+                # Check we are in the results level
+                if p == "results":
+                    # Get the select statement to generate the dynamic query
+                    stmt = self.get_join_stmt()
+                    # Get the filters for each query
+                    for q in self.child_paths:
+                        stmt = q.get_filter_clause(stmt)
+                    stmt = stmt.distinct()
+                    self.result_path = self.results(self.session, filtered=stmt)
+                    self.result_path.parse(paths)
+                else:
+                    raise FileNotFoundError
+
+    def open(self, flags):
+        if self.result_path:
+            return self.result_path.open(flags)
+        elif self.child_paths:
+            return self.child_paths[-1].open(flags)
+        else:
+            raise FileNotFoundError
+
+    def read(self, size, offset):
+        if self.result_path:
+            return self.result_path.read(size, offset)
+        elif self.child_paths:
+            return self.child_paths[-1].read(size, offset)
+        else:
+            raise FileNotFoundError
+
+    def getattr(self):
+        if self.result_path:
+            return self.result_path.getattr()
+        elif self.child_paths:
+            return self.child_paths[-1].getattr()
+        else:
+            ret = Stat()
+            ret.st_mode = S_IFDIR | 0o755
+            # ret.st_ctime = self.now,
+            # ret.st_mtime = self.now,
+            # ret.st_atime = self.now,
+            ret.st_nlink = 2
+            return ret
+
+    def readdir(self, offset):
+        if self.result_path:
+            yield from self.result_path.readdir(offset)
+        else:
+            ask_child = True
+            if not self.child_paths:
+                ask_child = False
+            elif self.child_paths and self.child_paths[-1].value:
+                ask_child = False
+
+            for r in ".", "..":
+                yield fuse.Direntry(r)
+            if ask_child:
+                yield from self.child_paths[-1].readdir(offset)
+            else:
+                for p, _unsued in self.queries:
+                    yield fuse.Direntry(p)
+                yield fuse.Direntry("results")
 
 
 class PathParser(object):
-    def __init__(self, schema):
+    def __init__(self, schema, root):
         self.schema = schema
         self.session = self.schema.create_session()
-        self.paths = {}
-        # Register the root
-        self.register("", RootPath)
-
-    def register(self, d, cls):
-        self.paths[d] = cls
+        self.root = root(self.session)
+        self.paths = []
 
     def parse(self, path):
-        # Iterate over the path components and gneerate the
+        if not len(path):
+            raise FileNotFoundError
         # corresponding Path instance
-        components = path.split(os.path.sep)
-        parsed_root = False
-        prev_path = []
-        ret = None
-        while components:
-            p = components[0]
-            # Handle the ["/", ""] case
-            if not p:
-                if parsed_root:
-                    components.pop(0)
-                    continue
-                parsed_root = True
-            if p in self.paths:
-                pc = self.paths[p](self.session, prev_path=prev_path)
-                pc.parse(components)
-                ret = pc
-                prev_path.append(pc)
-            else:
-                raise FileNotFoundError
-        return ret
+        self.paths = path.split(os.path.sep)
+        self.root.parse(list(self.paths))
+
+    def open(self, flags):
+        logger.warning("Open {}".format(self.paths))
+        return self.root.open(flags)
+
+    def read(self, size, offset):
+        logger.warning("Read {}".format(self.paths))
+        return self.root.read(size, offset)
+
+    def readdir(self, offset):
+        logger.warning("Readdir {}".format(self.paths))
+        return self.root.readdir(offset)
+
+    def getattr(self):
+        logger.warning("Getattr {}".format(self.paths))
+        return self.root.getattr()

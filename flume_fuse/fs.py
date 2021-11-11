@@ -14,12 +14,12 @@ from urllib.parse import urlparse
 import fuse
 from flume.config import Config
 from flume.options import Options
-from flume.schema import File, Info, Schema
+from flume.schema import Audio, Field, File, Info, Schema, Stream, Subtitle, Video
 from fuse import Fuse
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select
 
-from .path import PathParser, TreeTablePath
+from .path import PathParser, RootPath, SearchPath, SearchTablePath, TreeTablePath
 
 logger = logging.getLogger(__name__)
 fuse.fuse_python_api = (0, 2)
@@ -27,6 +27,44 @@ fuse.fuse_python_api = (0, 2)
 
 class FilePath(TreeTablePath):
     cls_name = File
+
+
+class SearchByStream(SearchTablePath):
+    cls_name = Stream
+
+
+class SearchBySubtitle(SearchTablePath):
+    cls_name = Subtitle
+
+
+class SearchByVideo(SearchTablePath):
+    cls_name = Video
+
+
+class SearchByAudio(SearchTablePath):
+    cls_name = Audio
+
+
+class SearchByField(SearchTablePath):
+    cls_name = Field
+
+
+class Search(SearchPath):
+    queries = [
+        ("stream", SearchByStream),
+        ("video", SearchByVideo),
+        ("audio", SearchByAudio),
+        ("subtitle", SearchBySubtitle),
+        ("field", SearchByField),
+    ]
+    results = FilePath
+
+    def get_join_stmt(self):
+        return select(File).join(File.info).join(Info.streams)
+
+
+class Root(RootPath):
+    cls_paths = [("files", FilePath), ("search", Search)]
 
 
 class FlumeFuse(Fuse):
@@ -42,9 +80,7 @@ class FlumeFuse(Fuse):
         self.config = Config(self)
         self.schema = Schema(self.config)
         self.session = self.schema.create_session()
-        self.path_parser = PathParser(self.schema)
-        # Regiter all the tables
-        self.path_parser.register("files", FilePath)
+        self.path_parser = PathParser(self.schema, Root)
         self.now = time()
 
     def _get_file(self, path):
@@ -69,28 +105,28 @@ class FlumeFuse(Fuse):
 
     def open(self, path, flags):
         try:
-            p = self.path_parser.parse(path)
-            return p.open(flags)
+            self.path_parser.parse(path)
+            return self.path_parser.open(flags)
         except FileNotFoundError:
             return -errno.ENOENT
 
     def read(self, path, size, offset):
         try:
             p = self.path_parser.parse(path)
-            return p.read(size, offset)
+            return self.path_parser.read(size, offset)
         except FileNotFoundError:
             return -errno.ENOENT
 
     def readdir(self, path, offset):
         try:
             p = self.path_parser.parse(path)
-            return p.readdir(offset)
+            return self.path_parser.readdir(offset)
         except FileNotFoundError:
             return -errno.ENOENT
 
     def getattr(self, path):
         try:
             p = self.path_parser.parse(path)
-            return p.getattr()
+            return self.path_parser.getattr()
         except FileNotFoundError:
             return -errno.ENOENT
