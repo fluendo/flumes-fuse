@@ -4,7 +4,7 @@
 ## Features
 * [x] Tree mode for File
 * [x] Search mode
-* [ ] Read media content directly from the FS
+* [x] Read media content directly from the FS
 
 ## Setup
 ## Development

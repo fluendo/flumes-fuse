@@ -14,19 +14,47 @@ from urllib.parse import urlparse
 import fuse
 from flume.config import Config
 from flume.options import Options
-from flume.schema import Audio, Field, File, Info, Schema, Stream, Subtitle, Video
+from flume.schema import Audio, Field, File, Info, Meta, Schema, Stream, Subtitle, Video
 from fuse import Fuse
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select
 
-from .path import PathParser, RootPath, SearchPath, SearchTablePath, TreeTablePath
+from .path import (
+    PathParser,
+    RootPath,
+    SearchPath,
+    SearchTablePath,
+    Stat,
+    TreeTablePath,
+    VirtualFile,
+)
 
 logger = logging.getLogger(__name__)
 fuse.fuse_python_api = (0, 2)
 
 
+class FileContent(VirtualFile):
+    def _real_file(self, obj):
+        meta = self.session.query(Meta).one()
+        # Media dir + path + name
+        return os.path.join(meta.root, self.obj.path, self.obj.name)
+
+    def read(self, size, offset):
+        with open(self._real_file(self.obj), "rb") as f:
+            f.seek(offset)
+            content = f.read(size)
+            return content
+
+    def getattr(self):
+        ret = Stat()
+        ret.st_mode = S_IFREG | 0o444
+        ret.st_size = os.path.getsize(self._real_file(self.obj))
+        return ret
+
+
 class FilePath(TreeTablePath):
     cls_name = File
+    extra_fields = [("contents", FileContent)]
 
 
 class SearchByStream(SearchTablePath):
@@ -82,26 +110,6 @@ class FlumeFuse(Fuse):
         self.session = self.schema.create_session()
         self.path_parser = PathParser(self.schema, Root)
         self.now = time()
-
-    def _get_file(self, path):
-        session = self.schema.create_session()
-        return session.query(File).filter_by(id=path.file).first()
-
-    def _get_values(self, path):
-        # get the table we refer to from the field
-        table_name = path.conditions[len(path.conditions) - 1]["struct"]
-        field_name = path.conditions[len(path.conditions) - 1]["field"]
-        table = get_tables(alias=True)[table_name]
-        field = table.columns[field_name]
-        s = select([field])
-        # now the conditions
-        s = path.get_condition_stmt(s, table_name, field_name, alias=True)
-        stmt = path.get_conditions_stmt()
-        s = s.where(get_tables(alias=True)["info"].columns["id"].in_(stmt))
-        with self.engine.connect() as conn:
-            result = conn.execute(s.distinct()).fetchall()
-            conn.close()
-        return result
 
     def open(self, path, flags):
         try:

@@ -10,6 +10,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
+class VirtualFile(object):
+    def __init__(self, session, obj):
+        self.session = session
+        self.obj = obj
+
+    def read(self, size, offset):
+        raise NotImplementedError
+
+    def getattr(self):
+        raise NotImplementedError
+
+
 class Stat(fuse.Stat):
     def __init__(self):
         self.st_mode = 0
@@ -116,7 +128,7 @@ class TreeTablePath(TablePath):
                 # Check the actual object
                 field = getattr(obj, r, None)
                 if field in self.fields:
-                    logger.warning(
+                    logger.debug(
                         "Relationship already traversed {} {}".format(
                             r, self.field_path
                         )
@@ -133,6 +145,7 @@ class TreeTablePath(TablePath):
         logger.debug("Getting fields {}".format(attr))
         while attr:
             a = attr[0]
+            field = None
             logger.debug("Getting field {}".format(a))
             # Handle the primary key case of an InstrumentedList
             if isinstance(obj, InstrumentedList):
@@ -150,9 +163,13 @@ class TreeTablePath(TablePath):
                 stmt = self.session.query(r_class).filter(getattr(r_class, pk) == a)
                 result = self.session.execute(stmt)
                 field = result.scalar()
+            elif a in [vf[0] for vf in self.extra_fields]:
+                logger.debug("Handling extra field {}".format(a))
+                field = [vf[1] for vf in self.extra_fields if vf[0] == a][0](
+                    self.session, self.obj
+                )
             else:
                 logger.debug("Handling basic field {} for {}".format(a, obj))
-                field = None
                 if a in self._get_columns(obj) or a in self._get_relationships(obj):
                     field = getattr(obj, a, None)
                     if not field:
@@ -228,6 +245,8 @@ class TreeTablePath(TablePath):
                 ret = Stat()
                 ret.st_mode = S_IFDIR | 0o755
                 ret.st_nlink = 2
+            elif isinstance(self.field, VirtualFile):
+                ret = self.field.getattr()
             else:
                 ret = Stat()
                 ret.st_mode = S_IFREG | 0o444
@@ -255,7 +274,11 @@ class TreeTablePath(TablePath):
                     ][0]
                     yield fuse.Direntry(str(getattr(i, list_object_id)))
         elif self.obj:
+            # Get the columns and relationships
             yield from self._get_obj_contents(self.obj)
+            # Get the extra fields
+            for ef in self.extra_fields:
+                yield fuse.Direntry(ef[0])
         else:
             if self.filtered_stmt == None:
                 stmt = self.session.query(self.cls_name)
@@ -270,15 +293,18 @@ class TreeTablePath(TablePath):
             raise FileNotFoundError
 
     def read(self, size, offset):
-        sfield = str(self.field)
-        slen = len(sfield)
-        if offset < slen:
-            if offset + size > slen:
-                size = slen - offset
-            buf = sfield[offset : offset + size]
+        if isinstance(self.field, VirtualFile):
+            return self.field.read(size, offset)
         else:
-            buf = ""
-        return bytes(buf, encoding="UTF-8")
+            sfield = str(self.field)
+            slen = len(sfield)
+            if offset < slen:
+                if offset + size > slen:
+                    size = slen - offset
+                buf = sfield[offset : offset + size]
+            else:
+                buf = ""
+            return bytes(buf, encoding="UTF-8")
 
 
 class SearchTablePath(TablePath):
@@ -515,17 +541,17 @@ class PathParser(object):
         self.root.parse(list(self.paths))
 
     def open(self, flags):
-        logger.warning("Open {}".format(self.paths))
+        logger.debug("Open {}".format(self.paths))
         return self.root.open(flags)
 
     def read(self, size, offset):
-        logger.warning("Read {}".format(self.paths))
+        logger.debug("Read {}".format(self.paths))
         return self.root.read(size, offset)
 
     def readdir(self, offset):
-        logger.warning("Readdir {}".format(self.paths))
+        logger.debug("Readdir {}".format(self.paths))
         return self.root.readdir(offset)
 
     def getattr(self):
-        logger.warning("Getattr {}".format(self.paths))
+        logger.debug("Getattr {}".format(self.paths))
         return self.root.getattr()

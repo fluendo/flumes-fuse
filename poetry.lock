@@ -124,7 +124,7 @@ SQLAlchemy = "^1.4.26"
 type = "git"
 url = "https://github.com/turran/flume.git"
 reference = "master"
-resolved_reference = "fd7228078a1f9c2e3bca32727b57148f3e30d6c4"
+resolved_reference = "5e97579e934a53a796f75d7dde2de1c92ea72f5a"
 
 [[package]]
 name = "fuse-python"
