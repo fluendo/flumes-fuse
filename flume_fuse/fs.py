@@ -10,7 +10,6 @@ from stat import S_IFDIR, S_IFREG
 from time import time
 from urllib.parse import urlparse
 
-# from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 import fuse
 from flume.config import Config
 from flume.options import Options
