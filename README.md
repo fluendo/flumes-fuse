@@ -7,6 +7,19 @@
 * [x] Read media content directly from the FS
 
 ## Setup
+
+Mount the corresponding `flume` database by running
+```
+flume-fuse -s <MOUNT DIR>
+```
+
+### Tree Mode
+You can navigate over `flume` files and read the fields and relationships
+
+### Search Mode
+You can navigate over `flume` files by generating queries in the filesystem through paths
+
+
 ## Development
 The project is based in `poetry` dependency management and packaging system. The basic steps are
 
