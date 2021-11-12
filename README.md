@@ -19,6 +19,7 @@ You can navigate over `flume` files and read the fields and relationships
 
 ### Search Mode
 You can navigate over `flume` files by generating queries in the filesystem through paths
+![Tree mode example](rsc/search-mode.svg)
 
 
 ## Development
@@ -39,7 +40,8 @@ Install your development pre-commit hooks
 poetry run pre-commit install
 ```
 
-## License
 ## References
 * [Flume](https://github.com/turran/flume)
 * [Poetry Template](https://github.com/yunojuno/poetry-template)
+* [Asciinema](https://asciinema.org/)
+* [Svg-term-cli](https://github.com/marionebl/svg-term-cli)
