@@ -15,6 +15,7 @@ flume-fuse -s <MOUNT DIR>
 
 ### Tree Mode
 You can navigate over `flume` files and read the fields and relationships
+![Tree mode example](rsc/tree-mode.svg)
 
 ### Search Mode
 You can navigate over `flume` files by generating queries in the filesystem through paths
