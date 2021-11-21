@@ -11,13 +11,24 @@ from time import time
 from urllib.parse import urlparse
 
 import fuse
-from flume.config import Config
-from flume.options import Options
-from flume.schema import Audio, Field, File, Info, Meta, Schema, Stream, Subtitle, Video
+from flumes.config import Config
+from flumes.options import Options
+from flumes.schema import (
+    Audio,
+    Field,
+    File,
+    Info,
+    Meta,
+    Schema,
+    Stream,
+    Subtitle,
+    Video,
+)
 from fuse import Fuse
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select
 
+from .options import FlumesFuseOptions
 from .path import (
     PathParser,
     RootPath,
@@ -94,7 +105,7 @@ class Root(RootPath):
     cls_paths = [("files", FilePath), ("search", Search)]
 
 
-class FlumeFuse(Fuse):
+class FlumesFuse(Fuse):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         # Make sure to have default arguments
@@ -137,3 +148,11 @@ class FlumeFuse(Fuse):
             return self.path_parser.getattr()
         except FileNotFoundError:
             return -errno.ENOENT
+
+
+def run():
+    # SQlite driver "can not work" in a multithread environment
+    # Make the option always available
+    fuse = FlumesFuse(parser_class=FlumesFuseOptions, dash_s_do="setsingle")
+    args = fuse.parse(values=fuse)
+    fuse.main()

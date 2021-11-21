@@ -3,7 +3,7 @@ import os
 from stat import S_IFDIR, S_IFREG
 
 import fuse
-from flume.schema import Base, File, Info
+from flumes.schema import Base, File, Info
 from sqlalchemy.orm.collections import InstrumentedList
 
 logger = logging.getLogger(__name__)

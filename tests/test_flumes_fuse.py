@@ -1,11 +1,11 @@
 from datetime import datetime
 
-from flume.config import Config
-from flume.options import Options
-from flume.schema import Audio, File, Info, Schema, Video
+from flumes.config import Config
+from flumes.options import Options
+from flumes.schema import Audio, File, Info, Schema, Video
 
-from flume_fuse import __version__
-from flume_fuse.path import PathParser, RootPath
+from flumes_fuse import __version__
+from flumes_fuse.path import PathParser, RootPath
 
 
 def test_version():

@@ -107,24 +107,17 @@ docs = ["furo (>=2021.8.17b43)", "sphinx (>=4.1)", "sphinx-autodoc-typehints (>=
 testing = ["covdefaults (>=1.2.0)", "coverage (>=4)", "pytest (>=4)", "pytest-cov", "pytest-timeout (>=1.4.2)"]
 
 [[package]]
-name = "flume"
-version = "0.1.0"
+name = "flumes"
+version = "0.1.4"
 description = ""
 category = "main"
 optional = false
-python-versions = "^3.9"
-develop = false
+python-versions = ">=3.9,<4.0"
 
 [package.dependencies]
-PyGObject = "^3.42.0"
-python-dateutil = "^2.8.2"
-SQLAlchemy = "^1.4.26"
-
-[package.source]
-type = "git"
-url = "https://github.com/turran/flume.git"
-reference = "master"
-resolved_reference = "5e97579e934a53a796f75d7dde2de1c92ea72f5a"
+PyGObject = ">=3.42.0,<4.0.0"
+python-dateutil = ">=2.8.2,<3.0.0"
+SQLAlchemy = ">=1.4.26,<2.0.0"
 
 [[package]]
 name = "fuse-python"
@@ -430,7 +423,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "df2ec79ff68d80a699ba9877db35c0b4a487eed8b03f15de10b4d79a29f02662"
+content-hash = "f7e3f67c808f70d4136aaf190786df5a40e8ddf94858ca9e56d19f7745f0dd00"
 
 [metadata.files]
 atomicwrites = [
@@ -469,7 +462,10 @@ filelock = [
     {file = "filelock-3.3.2-py3-none-any.whl", hash = "sha256:bb2a1c717df74c48a2d00ed625e5a66f8572a3a30baacb7657add1d7bac4097b"},
     {file = "filelock-3.3.2.tar.gz", hash = "sha256:7afc856f74fa7006a289fd10fa840e1eebd8bbff6bffb69c26c54a0512ea8cf8"},
 ]
-flume = []
+flumes = [
+    {file = "flumes-0.1.4-py3-none-any.whl", hash = "sha256:a0ac7738289d7a65cb83e434c7ca42c2383bf4697300692d8cad619335af8348"},
+    {file = "flumes-0.1.4.tar.gz", hash = "sha256:b5bf537e44524b8ac19c0c5bf6bfce5665f775cc5c0b789a924fa1f96a18d94f"},
+]
 fuse-python = [
     {file = "fuse-python-1.0.4.tar.gz", hash = "sha256:b9a69c38b3909ffd35d77cb1a73ebfdc3a103a6d4cdd20c86c70ed1141771580"},
     {file = "fuse_python-1.0.4-cp39-cp39-manylinux2010_x86_64.whl", hash = "sha256:288542ba5c38210bf378b57349222a9b8ce2bc5fe0f97dd39069cba78988127a"},

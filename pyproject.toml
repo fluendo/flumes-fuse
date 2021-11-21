@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "flume-fuse"
+name = "flumes-fuse"
 version = "0.1.0"
 description = ""
 authors = ["Jorge Zapata <jorgeluis.zapata@gmail.com>"]
@@ -8,7 +8,7 @@ authors = ["Jorge Zapata <jorgeluis.zapata@gmail.com>"]
 python = "^3.9"
 fuse-python = "^1.0.4"
 SQLAlchemy = "^1.4.26"
-flume = {git = "https://github.com/turran/flume.git"}
+flumes = "^0.1.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
@@ -17,7 +17,7 @@ isort = "^5.10.0"
 pre-commit = "^2.15.0"
 
 [tool.poetry.scripts]
-flume-fuse = "bin.flume_fuse:main"
+flumes-fuse = "flumes_fuse.fs:run"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
