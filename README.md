@@ -1,5 +1,5 @@
-# flume-fuse
-`Fuse` (Filesystem in Userspace) based filesystem to manage the `flume` database
+# flumes-fuse
+`Fuse` (Filesystem in Userspace) based filesystem to manage the `flumes` database
 
 ## Features
 * [x] Tree mode for File
@@ -8,17 +8,17 @@
 
 ## Setup
 
-Mount the corresponding `flume` database by running
+Mount the corresponding `flumes` database by running
 ```
-flume-fuse -s <MOUNT DIR>
+flumes-fuse -s <MOUNT DIR>
 ```
 
 ### Tree Mode
-You can navigate over `flume` files and read the fields and relationships
+You can navigate over `flumes` files and read the fields and relationships
 ![Tree mode example](rsc/tree-mode.svg)
 
 ### Search Mode
-You can navigate over `flume` files by generating queries in the filesystem through paths
+You can navigate over `flumes` files by generating queries in the filesystem through paths
 ![Tree mode example](rsc/search-mode.svg)
 
 
@@ -41,7 +41,7 @@ poetry run pre-commit install
 ```
 
 ## References
-* [Flume](https://github.com/turran/flume)
+* [Flume](https://github.com/turran/flumes)
 * [Poetry Template](https://github.com/yunojuno/poetry-template)
 * [Asciinema](https://asciinema.org/)
 * [Svg-term-cli](https://github.com/marionebl/svg-term-cli)
