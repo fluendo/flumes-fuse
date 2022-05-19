@@ -1,4 +1,4 @@
-# flumes-fuse
+# Flumes-Fuse
 `Fuse` (Filesystem in Userspace) based filesystem to manage the `flumes` database
 
 ## Features
