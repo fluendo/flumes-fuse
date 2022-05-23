@@ -1,8 +1,11 @@
 [tool.poetry]
 name = "flumes-fuse"
 version = "0.1.0"
-description = ""
+description = "Tool that generates a userspace filesystem off of a flumes created database"
+license = "LGPL-2.1-only"
 authors = ["Jorge Zapata <jorgeluis.zapata@gmail.com>"]
+maintainers = ["Michalis Dimopoulos <mdimopoulos@fluendo.com>"]
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -12,7 +15,7 @@ flumes = "^0.1.4"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
-black = "^21.10b0"
+black = "^22.1.0"
 isort = "^5.10.0"
 pre-commit = "^2.15.0"
 
