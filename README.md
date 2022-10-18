@@ -23,6 +23,8 @@
   - [Tree mode](#tree_mode)
   - [Search mode](#search_mode)
 - [Development](#development)
+  - [New releases](#new_releases)
+  - [Tagging](#tagging)
   - [Testing](#testing)
 - [License](#license)
 - [References](#references)
@@ -92,6 +94,24 @@ poetry update --lock
 If you also want poetry to install the latest versions in your local environment
 ```
 poetry update
+```
+
+**New releases** <a name = "new_releases"></a>
+
+To generate a new release you must update the version number. The following files will need to be updated: 
+* init file
+* tests/test_flumes_fuse.py
+* pyproject.toml
+
+Once it is merged, tagging must be done in order to distribute the new version correctly.
+
+**Tagging** <a name = "tagging"></a>
+
+```
+git tag -a <version> -m "Release <version>"
+```
+```
+git push origin --tags
 ```
 
 ## Testing <a name = "testing"></a>
