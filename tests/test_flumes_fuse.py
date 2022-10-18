@@ -9,7 +9,7 @@ from flumes_fuse.path import PathParser, RootPath
 
 
 def test_version():
-    assert __version__ == "0.1.1"
+    assert __version__ == "0.1.2"
 
 
 def test_path():

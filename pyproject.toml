@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flumes-fuse"
-version = "0.1.0"
+version = "0.1.2"
 description = "Tool that generates a userspace filesystem off of a flumes created database"
 license = "LGPL-2.1-only"
 authors = ["Jorge Zapata <jorgeluis.zapata@gmail.com>"]
